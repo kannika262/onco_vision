@@ -1,49 +1,18 @@
 import os
-import sys
-
 import cv2
 import torch
 import numpy as np
 
 from PIL import Image
 
+import torch.nn.functional as F
+
 from torchvision import transforms
-import matplotlib.cm as cm
 
 
-# =========================================
-# IMPORT MODEL
-# =========================================
-
-BASE_DIR = os.path.abspath(
-    os.path.join(
-        os.path.dirname(__file__),
-        "../brain"
-    )
-)
-
-sys.path.append(BASE_DIR)
-
-from brain_model import model
-
-
-# =========================================
-# DEVICE
-# =========================================
-
-device = torch.device(
-    "cuda" if torch.cuda.is_available()
-    else "cpu"
-)
-
-model = model.to(device)
-
-model.eval()
-
-
-# =========================================
+# =====================================================
 # IMAGE TRANSFORM
-# =========================================
+# =====================================================
 
 transform = transforms.Compose([
 
@@ -62,221 +31,275 @@ transform = transforms.Compose([
 ])
 
 
-# =========================================
-# TARGET LAYER
-# =========================================
+# =====================================================
+# GENERATE GRADCAM
+# =====================================================
 
-target_layer = model.layer4[-1]
+def generate_gradcam(
 
+    model,
 
-# =========================================
-# STORAGE
-# =========================================
+    image_path,
 
-gradients = None
-activations = None
+    scan_type="brain"
 
-
-# =========================================
-# FORWARD HOOK
-# =========================================
-
-def forward_hook(module, input, output):
-
-    global activations
-
-    activations = output
-
-
-# =========================================
-# BACKWARD HOOK
-# =========================================
-
-def backward_hook(module, grad_input, grad_output):
-
-    global gradients
-
-    gradients = grad_output[0]
-
-
-# =========================================
-# REGISTER HOOKS
-# =========================================
-
-target_layer.register_forward_hook(
-    forward_hook
-)
-
-target_layer.register_full_backward_hook(
-    backward_hook
-)
-
-
-# =========================================
-# GENERATE HEATMAP
-# =========================================
-
-def generate_gradcam(image_path):
+):
 
     try:
 
-        # =====================================
+        # =================================================
+        # ONLY FOR BRAIN MRI
+        # =================================================
+
+        if scan_type != "brain":
+
+            return None
+
+        # =================================================
         # LOAD IMAGE
-        # =====================================
+        # =================================================
 
         image = Image.open(
             image_path
         ).convert("RGB")
 
-        original_image = np.array(image)
+        original_image = cv2.imread(
+            image_path
+        )
 
-        # =====================================
-        # PREPROCESS
-        # =====================================
+        original_image = cv2.resize(
+
+            original_image,
+
+            (224, 224)
+
+        )
 
         input_tensor = transform(
             image
-        ).unsqueeze(0).to(device)
+        ).unsqueeze(0)
 
-        # =====================================
+        # =================================================
+        # STORE ACTIVATIONS & GRADIENTS
+        # =================================================
+
+        gradients = []
+
+        activations = []
+
+        # =================================================
+        # FORWARD HOOK
+        # =================================================
+
+        def forward_hook(
+
+            module,
+
+            input,
+
+            output
+
+        ):
+
+            activations.append(output)
+
+        # =================================================
+        # BACKWARD HOOK
+        # =================================================
+
+        def backward_hook(
+
+            module,
+
+            grad_input,
+
+            grad_output
+
+        ):
+
+            gradients.append(
+                grad_output[0]
+            )
+
+        # =================================================
+        # TARGET LAYER
+        # =================================================
+
+        target_layer = model.layer4[-1]
+
+        forward_handle = (
+            target_layer.register_forward_hook(
+                forward_hook
+            )
+        )
+
+        backward_handle = (
+            target_layer.register_full_backward_hook(
+                backward_hook
+            )
+        )
+
+        # =================================================
+        # MODEL EVAL
+        # =================================================
+
+        model.eval()
+
+        # =================================================
         # FORWARD PASS
-        # =====================================
+        # =================================================
 
         output = model(input_tensor)
 
-        predicted_class = torch.argmax(
-            output,
+        predicted_class = output.argmax(
             dim=1
         )
 
-        # =====================================
+        # =================================================
         # BACKWARD PASS
-        # =====================================
+        # =================================================
 
         model.zero_grad()
 
-        output[
+        loss = output[
             0,
             predicted_class
-        ].backward()
+        ]
 
-        # =====================================
-        # GET GRADIENTS
-        # =====================================
+        loss.backward()
 
-        pooled_gradients = torch.mean(
+        # =================================================
+        # GET GRADIENTS & ACTIVATIONS
+        # =================================================
 
-            gradients,
+        grads = gradients[0].detach()
+
+        acts = activations[0].detach()
+
+        pooled_grads = torch.mean(
+
+            grads,
 
             dim=[0, 2, 3]
 
         )
 
-        # =====================================
-        # GET ACTIVATIONS
-        # =====================================
-
-        activation = activations[0]
-
-        # =====================================
-        # APPLY WEIGHTS
-        # =====================================
+        # =================================================
+        # APPLY CHANNEL WEIGHTS
+        # =================================================
 
         for i in range(
-
-            pooled_gradients.shape[0]
-
+            acts.shape[1]
         ):
 
-            activation[i, :, :] *= pooled_gradients[i]
+            acts[:, i, :, :] *= (
+                pooled_grads[i]
+            )
 
-        # =====================================
+        # =================================================
         # CREATE HEATMAP
-        # =====================================
+        # =================================================
 
         heatmap = torch.mean(
 
-            activation,
+            acts,
 
-            dim=0
+            dim=1
 
-        ).detach().cpu().numpy()
+        ).squeeze()
 
-        # =====================================
-        # RELU
-        # =====================================
-
-        heatmap = np.maximum(
-            heatmap,
-            0
+        heatmap = F.relu(
+            heatmap
         )
 
-        # =====================================
+        # =================================================
         # NORMALIZE
-        # =====================================
+        # =================================================
 
-        if np.max(heatmap) != 0:
+        if torch.max(heatmap) != 0:
 
-            heatmap /= np.max(heatmap)
+            heatmap /= torch.max(
+                heatmap
+            )
 
-        # =====================================
-        # RESIZE
-        # =====================================
+        heatmap = heatmap.cpu().numpy()
+
+        # =================================================
+        # RESIZE HEATMAP
+        # =================================================
 
         heatmap = cv2.resize(
 
             heatmap,
 
-            (
-                original_image.shape[1],
-                original_image.shape[0]
-            )
+            (224, 224)
 
         )
 
-        # =====================================
+        heatmap = np.uint8(
+            255 * heatmap
+        )
+
+        # =================================================
         # APPLY COLORMAP
-        # =====================================
+        # =================================================
 
-        colored_heatmap = cm.jet(
-            heatmap
-        )[:, :, :3]
+        heatmap = cv2.applyColorMap(
 
-        colored_heatmap = np.uint8(
-            255 * colored_heatmap
+            heatmap,
+
+            cv2.COLORMAP_JET
+
         )
 
-        # =====================================
-        # OVERLAY
-        # =====================================
+        # =================================================
+        # OVERLAY ON ORIGINAL IMAGE
+        # =================================================
 
-        superimposed_img = cv2.addWeighted(
+        superimposed = cv2.addWeighted(
 
             original_image,
 
-            0.65,
+            0.6,
 
-            colored_heatmap,
+            heatmap,
 
-            0.35,
+            0.4,
 
             0
 
         )
 
-        # =====================================
-        # SAVE IMAGE
-        # =====================================
+        # =================================================
+        # SAVE HEATMAP
+        # =================================================
 
-        output_path = os.path.abspath(
+        output_dir = os.path.join(
 
-            os.path.join(
+            "app",
 
-                os.path.dirname(__file__),
+            "uploads"
 
-                "../../backend/app/uploads/gradcam_output.jpg"
+        )
 
-            )
+        os.makedirs(
+
+            output_dir,
+
+            exist_ok=True
+
+        )
+
+        filename = (
+            f"heatmap_"
+            f"{os.path.basename(image_path)}"
+        )
+
+        output_path = os.path.join(
+
+            output_dir,
+
+            filename
 
         )
 
@@ -284,10 +307,7 @@ def generate_gradcam(image_path):
 
             output_path,
 
-            cv2.cvtColor(
-                superimposed_img,
-                cv2.COLOR_RGB2BGR
-            )
+            superimposed
 
         )
 
@@ -296,7 +316,19 @@ def generate_gradcam(image_path):
             output_path
         )
 
-        return "uploads/gradcam_output.jpg"
+        # =================================================
+        # REMOVE HOOKS
+        # =================================================
+
+        forward_handle.remove()
+
+        backward_handle.remove()
+
+        # =================================================
+        # RETURN RELATIVE PATH
+        # =================================================
+
+        return f"uploads/{filename}".replace("\\", "/")
 
     except Exception as e:
 

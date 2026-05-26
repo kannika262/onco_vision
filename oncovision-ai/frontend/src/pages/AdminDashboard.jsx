@@ -1,294 +1,393 @@
 import React from "react";
 
-import { useNavigate } from "react-router-dom";
+import {
+  useNavigate
+} from "react-router-dom";
 
 export default function AdminDashboard() {
 
   const navigate = useNavigate();
 
+  // =====================================
+  // HOSPITAL LIST
+  // =====================================
+
   const hospitals = [
+
     "Apollo Hospital",
+
     "AIIMS Delhi",
+
     "Manipal Hospital",
+
     "Fortis Healthcare"
+
   ];
 
-  const doctors = [
-    {
-      name: "Dr. Mehta",
-      department: "Oncology",
-      status: "Active"
-    },
-    {
-      name: "Dr. Sharma",
-      department: "Radiology",
-      status: "Online"
-    }
-  ];
+  // =====================================
+  // NAVIGATION FUNCTION
+  // =====================================
+
+  const handleViewHospital = (hospital) => {
+
+    navigate(
+      `/hospital-details/${encodeURIComponent(
+        hospital
+      )}`
+    );
+
+  };
 
   return (
 
-    <div className="min-h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-100 p-8">
 
-      {/* Navbar */}
-      <div className="bg-white shadow px-8 py-4 flex justify-between items-center">
+      <div className="max-w-7xl mx-auto">
 
-        <div>
+        {/* HEADER */}
 
-          <h1 className="text-3xl font-bold text-blue-700">
+        <div className="mb-10">
+
+          <h1 className="
+            text-6xl
+            font-bold
+            text-blue-700
+            mb-4
+          ">
             Admin Dashboard
           </h1>
 
-          <p className="text-gray-500 mt-1">
-            Central AI Healthcare Management System
+          <p className="
+            text-gray-600
+            text-xl
+          ">
+            Federated AI Healthcare Management System
           </p>
 
         </div>
 
-        <button
+        {/* OVERVIEW CARDS */}
 
-          onClick={() =>
-            navigate("/hospital-details")
-          }
+        <div className="
+          grid
+          grid-cols-1
+          md:grid-cols-4
+          gap-6
+          mb-12
+        ">
 
-          className="
-            bg-blue-600
-            hover:bg-blue-700
-            text-white
-            px-6
-            py-3
-            rounded-2xl
-            transition
-          "
-        >
-          View Network
-        </button>
+          <div className="
+            bg-white
+            rounded-3xl
+            shadow-lg
+            p-8
+          ">
 
-      </div>
-
-      <div className="p-8">
-
-        {/* Top Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-
-          <div className="bg-white p-6 rounded-2xl shadow-lg">
-
-            <h2 className="text-lg text-gray-500">
-              Registered Patients
+            <h2 className="
+              text-gray-500
+              text-lg
+            ">
+              Connected Hospitals
             </h2>
 
-            <p className="text-5xl font-bold text-blue-600 mt-4">
-              2,430
+            <p className="
+              text-5xl
+              font-bold
+              text-blue-700
+              mt-4
+            ">
+              4
             </p>
 
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <div className="
+            bg-white
+            rounded-3xl
+            shadow-lg
+            p-8
+          ">
 
-            <h2 className="text-lg text-gray-500">
-              Active Doctors
+            <h2 className="
+              text-gray-500
+              text-lg
+            ">
+              Active AI Models
             </h2>
 
-            <p className="text-5xl font-bold text-green-600 mt-4">
-              128
+            <p className="
+              text-5xl
+              font-bold
+              text-green-700
+              mt-4
+            ">
+              12
             </p>
 
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <div className="
+            bg-white
+            rounded-3xl
+            shadow-lg
+            p-8
+          ">
 
-            <h2 className="text-lg text-gray-500">
-              AI Accuracy
+            <h2 className="
+              text-gray-500
+              text-lg
+            ">
+              Patients Processed
             </h2>
 
-            <p className="text-5xl font-bold text-purple-600 mt-4">
-              94%
+            <p className="
+              text-5xl
+              font-bold
+              text-purple-700
+              mt-4
+            ">
+              5.9K
             </p>
 
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-lg">
+          <div className="
+            bg-white
+            rounded-3xl
+            shadow-lg
+            p-8
+          ">
 
-            <h2 className="text-lg text-gray-500">
-              High Risk Cases
+            <h2 className="
+              text-gray-500
+              text-lg
+            ">
+              Federated Accuracy
             </h2>
 
-            <p className="text-5xl font-bold text-red-600 mt-4">
-              34
+            <p className="
+              text-5xl
+              font-bold
+              text-red-700
+              mt-4
+            ">
+              96%
             </p>
 
           </div>
 
         </div>
 
-        {/* Management Panels */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mb-10">
+        {/* HOSPITAL NETWORK */}
 
-          {/* Patients */}
-          <div className="bg-white rounded-3xl shadow-xl p-8">
+        <div className="
+          bg-white
+          rounded-3xl
+          shadow-xl
+          p-10
+          mb-12
+        ">
 
-            <h2 className="text-3xl font-bold mb-6">
-              Patient Management
-            </h2>
+          <h2 className="
+            text-5xl
+            font-bold
+            mb-10
+          ">
+            Hospital Network
+          </h2>
 
-            <div className="space-y-4">
+          <div className="space-y-6">
 
-              <div className="border p-5 rounded-2xl">
-                View Patient Records
-              </div>
+            {hospitals.map((hospital, index) => (
 
-              <div className="border p-5 rounded-2xl">
-                Manage Medical History
-              </div>
+              <div
 
-              <div className="border p-5 rounded-2xl">
-                Encrypted Record Access
-              </div>
+                key={index}
 
-            </div>
+                className="
+                  flex
+                  justify-between
+                  items-center
+                  border
+                  rounded-3xl
+                  p-6
+                  hover:shadow-lg
+                  transition
+                  bg-gray-50
+                "
+              >
 
-          </div>
+                <div>
 
-          {/* Doctors */}
-          <div className="bg-white rounded-3xl shadow-xl p-8">
-
-            <h2 className="text-3xl font-bold mb-6">
-              Doctor Management
-            </h2>
-
-            <div className="space-y-5">
-
-              {doctors.map((doc, index) => (
-
-                <div
-                  key={index}
-                  className="border p-5 rounded-2xl flex justify-between items-center"
-                >
-
-                  <div>
-
-                    <h3 className="font-bold text-xl">
-                      {doc.name}
-                    </h3>
-
-                    <p className="text-gray-500">
-                      {doc.department}
-                    </p>
-
-                  </div>
-
-                  <span className="bg-green-100 text-green-600 px-4 py-2 rounded-full">
-                    {doc.status}
-                  </span>
-
-                </div>
-
-              ))}
-
-            </div>
-
-          </div>
-
-        </div>
-
-        {/* Hospitals + AI Models */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mb-10">
-
-          {/* Hospitals */}
-          <div className="bg-white rounded-3xl shadow-xl p-8">
-
-            <h2 className="text-3xl font-bold mb-6">
-              Hospital Network
-            </h2>
-
-            <div className="space-y-4">
-
-              {hospitals.map((hospital, index) => (
-
-                <div
-                  key={index}
-                  className="border p-5 rounded-2xl flex justify-between items-center"
-                >
-
-                  <h3 className="font-bold text-lg">
+                  <h3 className="
+                    text-3xl
+                    font-bold
+                    mb-2
+                  ">
                     {hospital}
                   </h3>
 
-                  <button
-
-                    onClick={() =>
-                      navigate("/hospital-details")
-                    }
-
-                    className="
-                      bg-blue-600
-                      hover:bg-blue-700
-                      text-white
-                      px-4
-                      py-2
-                      rounded-xl
-                      transition
-                    "
-                  >
-                    View
-                  </button>
+                  <p className="
+                    text-gray-500
+                    text-lg
+                  ">
+                    Federated AI Node Connected
+                  </p>
 
                 </div>
 
-              ))}
+                <button
 
-            </div>
+                  onClick={() =>
+                    handleViewHospital(hospital)
+                  }
+
+                  className="
+                    bg-blue-600
+                    hover:bg-blue-700
+                    text-white
+                    px-8
+                    py-3
+                    rounded-2xl
+                    text-lg
+                    font-semibold
+                    transition
+                  "
+                >
+                  View
+                </button>
+
+              </div>
+
+            ))}
 
           </div>
 
-          {/* AI Models */}
-          <div className="bg-white rounded-3xl shadow-xl p-8">
+        </div>
 
-            <h2 className="text-3xl font-bold mb-6">
-              AI Model Management
-            </h2>
+        {/* PLATFORM ANALYTICS */}
 
-            <div className="space-y-5">
+        <div className="
+          bg-white
+          rounded-3xl
+          shadow-xl
+          p-10
+        ">
 
-              <div className="border p-5 rounded-2xl">
+          <h2 className="
+            text-5xl
+            font-bold
+            mb-10
+          ">
+            Platform Analytics
+          </h2>
 
-                <div className="flex justify-between items-center">
+          <div className="
+            grid
+            grid-cols-1
+            md:grid-cols-3
+            gap-8
+          ">
 
-                  <h3 className="font-bold text-xl">
-                    Lung Cancer Model
-                  </h3>
+            <div className="
+              bg-blue-50
+              border
+              border-blue-200
+              rounded-3xl
+              p-8
+            ">
 
-                  <span className="bg-green-100 text-green-600 px-4 py-2 rounded-full">
-                    Active
-                  </span>
+              <h3 className="
+                text-2xl
+                font-bold
+                text-blue-700
+                mb-4
+              ">
+                Brain MRI Model
+              </h3>
 
-                </div>
+              <p className="
+                text-6xl
+                font-bold
+                text-blue-800
+              ">
+                96%
+              </p>
 
-                <p className="text-gray-500 mt-3">
-                  DenseNet121 - Accuracy: 94%
-                </p>
+              <p className="
+                text-gray-600
+                mt-4
+              ">
+                Federated Accuracy
+              </p>
 
-              </div>
+            </div>
 
-              <div className="border p-5 rounded-2xl">
+            <div className="
+              bg-green-50
+              border
+              border-green-200
+              rounded-3xl
+              p-8
+            ">
 
-                <div className="flex justify-between items-center">
+              <h3 className="
+                text-2xl
+                font-bold
+                text-green-700
+                mb-4
+              ">
+                Lung AI Model
+              </h3>
 
-                  <h3 className="font-bold text-xl">
-                    Brain Tumor Model
-                  </h3>
+              <p className="
+                text-6xl
+                font-bold
+                text-green-800
+              ">
+                94%
+              </p>
 
-                  <span className="bg-yellow-100 text-yellow-600 px-4 py-2 rounded-full">
-                    Training
-                  </span>
+              <p className="
+                text-gray-600
+                mt-4
+              ">
+                Federated Accuracy
+              </p>
 
-                </div>
+            </div>
 
-                <p className="text-gray-500 mt-3">
-                  ResNet50 - Accuracy: 89%
-                </p>
+            <div className="
+              bg-purple-50
+              border
+              border-purple-200
+              rounded-3xl
+              p-8
+            ">
 
-              </div>
+              <h3 className="
+                text-2xl
+                font-bold
+                text-purple-700
+                mb-4
+              ">
+                Secure Aggregation
+              </h3>
+
+              <p className="
+                text-6xl
+                font-bold
+                text-purple-800
+              ">
+                ON
+              </p>
+
+              <p className="
+                text-gray-600
+                mt-4
+              ">
+                Privacy-Preserving AI
+              </p>
 
             </div>
 
@@ -301,4 +400,5 @@ export default function AdminDashboard() {
     </div>
 
   );
+
 }

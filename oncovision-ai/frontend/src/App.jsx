@@ -113,10 +113,9 @@ function App() {
           element={<AdminDashboard />}
         />
         <Route
-  path="/hospital-details"
+  path="/hospital-details/:hospitalName"
   element={<HospitalDetails />}
 />
-
       </Routes>
 
     </BrowserRouter>
