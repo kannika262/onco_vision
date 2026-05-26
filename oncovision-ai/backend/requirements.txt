@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+python-multipart
+pydantic
+pydantic[email]
+sqlalchemy
+passlib[bcrypt]
+python-jose
+pillow
+numpy
+opencv-python
+torch
+torchvision
+scikit-learn
+reportlab
