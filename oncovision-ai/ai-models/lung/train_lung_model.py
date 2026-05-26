@@ -1,31 +1,61 @@
 import os
+
 import torch
+
 import torch.nn as nn
+
 import torch.optim as optim
 
-from torchvision import datasets
-from torchvision import transforms
-from torchvision import models
+from torchvision import datasets, transforms, models
 
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, random_split
 
 
-# =========================
+# =========================================
 # DATASET PATH
-# =========================
+# =========================================
 
-DATASET_PATH = os.path.abspath(
+BASE_DIR = os.path.abspath(
+
     os.path.join(
+
         os.path.dirname(__file__),
-        "../../dataset/lung/chest_xray/chest_xray/train"
+
+        "../../"
+
     )
+
 )
-print("DATASET PATH:", DATASET_PATH)
 
+DATASET_DIR = os.path.join(
 
-# =========================
-# IMAGE TRANSFORMS
-# =========================
+    BASE_DIR,
+
+    "dataset/lung/chest_xray/chest_xray/train"
+
+)
+
+print("DATASET PATH:", DATASET_DIR)
+
+# =========================================
+# DEVICE
+# =========================================
+
+device = torch.device(
+
+    "cuda"
+
+    if torch.cuda.is_available()
+
+    else "cpu"
+
+)
+
+print("USING DEVICE:", device)
+
+# =========================================
+# IMAGE TRANSFORM
+# =========================================
 
 transform = transforms.Compose([
 
@@ -35,18 +65,25 @@ transform = transforms.Compose([
 
     transforms.RandomRotation(10),
 
-    transforms.ToTensor()
+    transforms.ToTensor(),
+
+    transforms.Normalize(
+
+        mean=[0.485, 0.456, 0.406],
+
+        std=[0.229, 0.224, 0.225]
+
+    )
 
 ])
 
-
-# =========================
-# LOAD DATASET
-# =========================
+# =========================================
+# DATASET
+# =========================================
 
 dataset = datasets.ImageFolder(
 
-    DATASET_PATH,
+    DATASET_DIR,
 
     transform=transform
 
@@ -54,16 +91,25 @@ dataset = datasets.ImageFolder(
 
 print("CLASSES:", dataset.classes)
 
-print("TOTAL IMAGES:", len(dataset))
+# =========================================
+# TRAIN / VALID SPLIT
+# =========================================
 
+train_size = int(0.8 * len(dataset))
 
-# =========================
-# DATALOADER
-# =========================
+val_size = len(dataset) - train_size
 
-loader = DataLoader(
+train_dataset, val_dataset = random_split(
 
     dataset,
+
+    [train_size, val_size]
+
+)
+
+train_loader = DataLoader(
+
+    train_dataset,
 
     batch_size=16,
 
@@ -71,131 +117,192 @@ loader = DataLoader(
 
 )
 
+val_loader = DataLoader(
 
-# =========================
-# LOAD DENSENET121
-# =========================
+    val_dataset,
+
+    batch_size=16,
+
+    shuffle=False
+
+)
+
+# =========================================
+# MODEL
+# =========================================
 
 model = models.densenet121(pretrained=True)
 
-num_features = model.classifier.in_features
-
 model.classifier = nn.Linear(
-    num_features,
+
+    model.classifier.in_features,
+
     2
+
 )
 
+model = model.to(device)
 
-# =========================
-# LOSS FUNCTION
-# =========================
+# =========================================
+# LOSS & OPTIMIZER
+# =========================================
 
 criterion = nn.CrossEntropyLoss()
-
-
-# =========================
-# OPTIMIZER
-# =========================
 
 optimizer = optim.Adam(
 
     model.parameters(),
 
-    lr=0.001
+    lr=0.0001
 
 )
 
-
-# =========================
+# =========================================
 # TRAINING
-# =========================
+# =========================================
 
 EPOCHS = 5
 
-print("\nTRAINING STARTED...\n")
+best_accuracy = 0
+
+print("TRAINING STARTED...\n")
 
 for epoch in range(EPOCHS):
 
-    running_loss = 0.0
+    # =====================================
+    # TRAIN
+    # =====================================
+
+    model.train()
+
+    running_loss = 0
 
     correct = 0
 
     total = 0
 
-    for images, labels in loader:
+    for images, labels in train_loader:
 
-        # =========================
-        # ZERO GRADIENTS
-        # =========================
+        images = images.to(device)
+
+        labels = labels.to(device)
 
         optimizer.zero_grad()
 
-        # =========================
-        # FORWARD PASS
-        # =========================
-
         outputs = model(images)
 
-        # =========================
-        # LOSS
-        # =========================
+        loss = criterion(
 
-        loss = criterion(outputs, labels)
+            outputs,
 
-        # =========================
-        # BACKPROPAGATION
-        # =========================
+            labels
+
+        )
 
         loss.backward()
 
         optimizer.step()
 
-        # =========================
-        # STATS
-        # =========================
-
         running_loss += loss.item()
 
-        _, predicted = torch.max(outputs, 1)
+        _, predicted = torch.max(
+
+            outputs,
+
+            1
+
+        )
 
         total += labels.size(0)
 
-        correct += (predicted == labels).sum().item()
+        correct += (
 
-    # =========================
-    # EPOCH RESULTS
-    # =========================
+            predicted == labels
 
-    accuracy = 100 * correct / total
+        ).sum().item()
+
+    train_accuracy = 100 * correct / total
+
+    # =====================================
+    # VALIDATION
+    # =====================================
+
+    model.eval()
+
+    val_correct = 0
+
+    val_total = 0
+
+    with torch.no_grad():
+
+        for images, labels in val_loader:
+
+            images = images.to(device)
+
+            labels = labels.to(device)
+
+            outputs = model(images)
+
+            _, predicted = torch.max(
+
+                outputs,
+
+                1
+
+            )
+
+            val_total += labels.size(0)
+
+            val_correct += (
+
+                predicted == labels
+
+            ).sum().item()
+
+    val_accuracy = 100 * val_correct / val_total
 
     print(
 
-        f"Epoch [{epoch+1}/{EPOCHS}] | "
-        f"Loss: {running_loss:.4f} | "
-        f"Accuracy: {accuracy:.2f}%"
+        f"Epoch [{epoch+1}/{EPOCHS}] "
+
+        f"Loss: {running_loss:.4f} "
+
+        f"Train Acc: {train_accuracy:.2f}% "
+
+        f"Val Acc: {val_accuracy:.2f}%"
 
     )
 
+    # =====================================
+    # SAVE BEST MODEL
+    # =====================================
 
-# =========================
-# SAVE MODEL
-# =========================
+    if val_accuracy > best_accuracy:
 
-MODEL_PATH = os.path.abspath(
-    os.path.join(
-        os.path.dirname(__file__),
-        "lung_weights.pth"
-    )
-)
+        best_accuracy = val_accuracy
 
-torch.save(
+        SAVE_PATH = os.path.join(
 
-    model.state_dict(),
+            os.path.dirname(__file__),
 
-    MODEL_PATH
+            "lung_weights.pth"
 
-)
+        )
 
-print("\nMODEL TRAINED SUCCESSFULLY")
+        torch.save(
 
-print(f"MODEL SAVED TO:\n{MODEL_PATH}")
+            model.state_dict(),
+
+            SAVE_PATH
+
+        )
+
+        print(
+
+            "BEST MODEL SAVED"
+
+        )
+
+print("\nTRAINING COMPLETE")
+
+print("BEST VALIDATION ACCURACY:", best_accuracy)

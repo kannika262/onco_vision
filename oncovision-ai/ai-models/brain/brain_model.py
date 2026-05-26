@@ -1,3 +1,5 @@
+import os
+
 import torch
 
 import torch.nn as nn
@@ -6,8 +8,22 @@ from torchvision import models, transforms
 
 from PIL import Image
 
-import os
 
+# =========================================
+# DEVICE CONFIG
+# =========================================
+
+device = torch.device(
+
+    "cuda"
+
+    if torch.cuda.is_available()
+
+    else "cpu"
+
+)
+
+print("USING DEVICE:", device)
 
 # =========================================
 # MODEL PATH
@@ -17,23 +33,9 @@ MODEL_PATH = os.path.join(
 
     os.path.dirname(__file__),
 
-    "brain_model.pth"
+    "brain_weights.pth"
 
 )
-
-# =========================================
-# DEVICE
-# =========================================
-
-device = torch.device(
-
-    "cuda" if torch.cuda.is_available()
-
-    else "cpu"
-
-)
-
-print("USING DEVICE:", device)
 
 # =========================================
 # LOAD MODEL
@@ -50,29 +52,35 @@ model.fc = nn.Linear(
 )
 
 # =========================================
-# LOAD WEIGHTS
+# LOAD TRAINED WEIGHTS
 # =========================================
 
-model.load_state_dict(
+try:
 
-    torch.load(
+    model.load_state_dict(
 
-        MODEL_PATH,
+        torch.load(
 
-        map_location=device
+            MODEL_PATH,
+
+            map_location=device
+
+        )
 
     )
 
-)
+    print("BRAIN MODEL LOADED SUCCESSFULLY")
 
-model.to(device)
+except Exception as e:
+
+    print("MODEL LOAD ERROR:", str(e))
+
+model = model.to(device)
 
 model.eval()
 
-print("BRAIN MODEL LOADED SUCCESSFULLY")
-
 # =========================================
-# IMAGE TRANSFORM
+# IMAGE PREPROCESSING
 # =========================================
 
 transform = transforms.Compose([
@@ -92,7 +100,7 @@ transform = transforms.Compose([
 ])
 
 # =========================================
-# CLASSES
+# CLASS LABELS
 # =========================================
 
 classes = [
@@ -111,21 +119,55 @@ def predict_brain_tumor(image_path):
 
     try:
 
+        # =====================================
+        # VALIDATE IMAGE
+        # =====================================
+
+        if not os.path.exists(image_path):
+
+            return {
+
+                "prediction":
+                "Prediction Failed",
+
+                "confidence":
+                0
+
+            }
+
+        # =====================================
+        # LOAD IMAGE
+        # =====================================
+
         image = Image.open(
 
             image_path
 
         ).convert("RGB")
 
-        image = transform(image)
+        # =====================================
+        # TRANSFORM IMAGE
+        # =====================================
 
-        image = image.unsqueeze(0)
+        image_tensor = transform(
 
-        image = image.to(device)
+            image
+
+        ).unsqueeze(0)
+
+        image_tensor = image_tensor.to(device)
+
+        # =====================================
+        # MODEL INFERENCE
+        # =====================================
 
         with torch.no_grad():
 
-            outputs = model(image)
+            outputs = model(
+
+                image_tensor
+
+            )
 
             probabilities = torch.softmax(
 
@@ -135,33 +177,83 @@ def predict_brain_tumor(image_path):
 
             )
 
-            confidence, predicted = torch.max(
+        # =====================================
+        # SCORES
+        # =====================================
 
-                probabilities,
+        no_tumor_prob = probabilities[
+            0
+        ][0].item()
 
-                1
+        tumor_prob = probabilities[
+            0
+        ][1].item()
+
+        # =====================================
+        # STABLE DECISION LOGIC
+        # =====================================
+
+        THRESHOLD = 0.70
+
+        if tumor_prob >= THRESHOLD:
+
+            prediction = "Tumor Detected"
+
+            confidence = round(
+
+                tumor_prob * 100,
+
+                2
 
             )
 
-        prediction = classes[
+        else:
 
-            predicted.item()
+            prediction = "No Tumor"
 
-        ]
+            confidence = round(
 
-        confidence = round(
+                no_tumor_prob * 100,
 
-            confidence.item() * 100,
+                2
 
-            2
+            )
 
-        )
+        # =====================================
+        # SAFETY LIMITS
+        # =====================================
+
+        if confidence > 99.5:
+
+            confidence = 99.0
+
+        # =====================================
+        # DEBUG LOGS
+        # =====================================
+
+        print("\n========== AI PREDICTION ==========")
+
+        print("Tumor Probability:", tumor_prob)
+
+        print("No Tumor Probability:", no_tumor_prob)
+
+        print("Final Prediction:", prediction)
+
+        print("Confidence:", confidence)
+
+        print("===================================\n")
+
+        # =====================================
+        # RETURN RESULT
+        # =====================================
 
         return {
 
-            "prediction": prediction,
+            "prediction":
+            prediction,
 
-            "confidence": confidence
+            "confidence":
+            confidence
 
         }
 
@@ -169,7 +261,7 @@ def predict_brain_tumor(image_path):
 
         print(
 
-            "BRAIN MODEL ERROR:",
+            "BRAIN PREDICTION ERROR:",
 
             str(e)
 
@@ -177,8 +269,10 @@ def predict_brain_tumor(image_path):
 
         return {
 
-            "prediction": "Prediction Failed",
+            "prediction":
+            "Prediction Failed",
 
-            "confidence": 0
+            "confidence":
+            0
 
         }

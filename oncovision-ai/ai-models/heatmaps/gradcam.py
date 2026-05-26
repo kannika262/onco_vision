@@ -1,155 +1,308 @@
 import os
+import sys
+
 import cv2
 import torch
 import numpy as np
 
 from PIL import Image
-from torchvision import transforms, models
-import torch.nn as nn
+
+from torchvision import transforms
+import matplotlib.cm as cm
+
+
+# =========================================
+# IMPORT MODEL
+# =========================================
+
+BASE_DIR = os.path.abspath(
+    os.path.join(
+        os.path.dirname(__file__),
+        "../brain"
+    )
+)
+
+sys.path.append(BASE_DIR)
+
+from brain_model import model
+
+
+# =========================================
+# DEVICE
+# =========================================
+
+device = torch.device(
+    "cuda" if torch.cuda.is_available()
+    else "cpu"
+)
+
+model = model.to(device)
+
+model.eval()
+
+
+# =========================================
+# IMAGE TRANSFORM
+# =========================================
+
+transform = transforms.Compose([
+
+    transforms.Resize((224, 224)),
+
+    transforms.ToTensor(),
+
+    transforms.Normalize(
+
+        mean=[0.485, 0.456, 0.406],
+
+        std=[0.229, 0.224, 0.225]
+
+    )
+
+])
+
+
+# =========================================
+# TARGET LAYER
+# =========================================
+
+target_layer = model.layer4[-1]
+
+
+# =========================================
+# STORAGE
+# =========================================
+
+gradients = None
+activations = None
+
+
+# =========================================
+# FORWARD HOOK
+# =========================================
+
+def forward_hook(module, input, output):
+
+    global activations
+
+    activations = output
+
+
+# =========================================
+# BACKWARD HOOK
+# =========================================
+
+def backward_hook(module, grad_input, grad_output):
+
+    global gradients
+
+    gradients = grad_output[0]
+
+
+# =========================================
+# REGISTER HOOKS
+# =========================================
+
+target_layer.register_forward_hook(
+    forward_hook
+)
+
+target_layer.register_full_backward_hook(
+    backward_hook
+)
+
+
+# =========================================
+# GENERATE HEATMAP
+# =========================================
+
 def generate_gradcam(image_path):
 
-    # =========================
-    # LOAD ORIGINAL IMAGE
-    # =========================
+    try:
 
-    original = cv2.imread(image_path)
+        # =====================================
+        # LOAD IMAGE
+        # =====================================
 
-    original = cv2.resize(original, (128, 128))
+        image = Image.open(
+            image_path
+        ).convert("RGB")
 
-    gray = cv2.cvtColor(
-        original,
-        cv2.COLOR_BGR2GRAY
-    )
+        original_image = np.array(image)
 
-    # =========================
-    # BLUR IMAGE
-    # =========================
+        # =====================================
+        # PREPROCESS
+        # =====================================
 
-    blur = cv2.GaussianBlur(
-        gray,
-        (5, 5),
-        0
-    )
+        input_tensor = transform(
+            image
+        ).unsqueeze(0).to(device)
 
-    # =========================
-    # THRESHOLD BRIGHT TUMOR AREA
-    # =========================
+        # =====================================
+        # FORWARD PASS
+        # =====================================
 
-    _, thresh = cv2.threshold(
-        blur,
-        180,
-        255,
-        cv2.THRESH_BINARY
-    )
+        output = model(input_tensor)
 
-    # =========================
-    # REMOVE NOISE
-    # =========================
-
-    kernel = np.ones((5, 5), np.uint8)
-
-    thresh = cv2.morphologyEx(
-        thresh,
-        cv2.MORPH_OPEN,
-        kernel
-    )
-
-    thresh = cv2.morphologyEx(
-        thresh,
-        cv2.MORPH_CLOSE,
-        kernel
-    )
-
-    # =========================
-    # FIND CONTOURS
-    # =========================
-
-    contours, _ = cv2.findContours(
-        thresh,
-        cv2.RETR_EXTERNAL,
-        cv2.CHAIN_APPROX_SIMPLE
-    )
-
-    # =========================
-    # COPY ORIGINAL IMAGE
-    # =========================
-
-    output = original.copy()
-
-    if contours:
-
-        # Largest contour = tumor
-        largest_contour = max(
-            contours,
-            key=cv2.contourArea
+        predicted_class = torch.argmax(
+            output,
+            dim=1
         )
 
-        # Ignore tiny regions
-        if cv2.contourArea(largest_contour) > 100:
+        # =====================================
+        # BACKWARD PASS
+        # =====================================
 
-            # Create mask
-            mask = np.zeros_like(gray)
+        model.zero_grad()
 
-            cv2.drawContours(
-                mask,
-                [largest_contour],
-                -1,
-                255,
-                -1
-            )
+        output[
+            0,
+            predicted_class
+        ].backward()
 
-            # Smooth mask
-            mask = cv2.GaussianBlur(
-                mask,
-                (31, 31),
-                0
-            )
+        # =====================================
+        # GET GRADIENTS
+        # =====================================
 
-            alpha = mask.astype(np.float32) / 255.0
+        pooled_gradients = torch.mean(
 
-            alpha = alpha * 0.45
+            gradients,
 
-            # Apply RED overlay ONLY inside tumor
-            for c in range(3):
+            dim=[0, 2, 3]
 
-                if c == 2:  # Red channel
-
-                    output[:, :, c] = np.where(
-                        alpha > 0,
-                        output[:, :, c] +
-                        (255 - output[:, :, c]) * alpha,
-                        output[:, :, c]
-                    )
-
-            # Draw clean contour
-            cv2.drawContours(
-                output,
-                [largest_contour],
-                -1,
-                (0, 0, 255),
-                2
-            )
-
-    # =========================
-    # SAVE OUTPUT
-    # =========================
-
-    output_dir = os.path.abspath(
-        os.path.join(
-            os.path.dirname(__file__),
-            "../../backend/app/uploads"
         )
-    )
 
-    os.makedirs(output_dir, exist_ok=True)
+        # =====================================
+        # GET ACTIVATIONS
+        # =====================================
 
-    output_path = os.path.join(
-        output_dir,
-        "gradcam_output.jpg"
-    )
+        activation = activations[0]
 
-    cv2.imwrite(output_path, output)
+        # =====================================
+        # APPLY WEIGHTS
+        # =====================================
 
-    print("HEATMAP SAVED:", output_path)
+        for i in range(
 
-    return "uploads/gradcam_output.jpg"
+            pooled_gradients.shape[0]
+
+        ):
+
+            activation[i, :, :] *= pooled_gradients[i]
+
+        # =====================================
+        # CREATE HEATMAP
+        # =====================================
+
+        heatmap = torch.mean(
+
+            activation,
+
+            dim=0
+
+        ).detach().cpu().numpy()
+
+        # =====================================
+        # RELU
+        # =====================================
+
+        heatmap = np.maximum(
+            heatmap,
+            0
+        )
+
+        # =====================================
+        # NORMALIZE
+        # =====================================
+
+        if np.max(heatmap) != 0:
+
+            heatmap /= np.max(heatmap)
+
+        # =====================================
+        # RESIZE
+        # =====================================
+
+        heatmap = cv2.resize(
+
+            heatmap,
+
+            (
+                original_image.shape[1],
+                original_image.shape[0]
+            )
+
+        )
+
+        # =====================================
+        # APPLY COLORMAP
+        # =====================================
+
+        colored_heatmap = cm.jet(
+            heatmap
+        )[:, :, :3]
+
+        colored_heatmap = np.uint8(
+            255 * colored_heatmap
+        )
+
+        # =====================================
+        # OVERLAY
+        # =====================================
+
+        superimposed_img = cv2.addWeighted(
+
+            original_image,
+
+            0.65,
+
+            colored_heatmap,
+
+            0.35,
+
+            0
+
+        )
+
+        # =====================================
+        # SAVE IMAGE
+        # =====================================
+
+        output_path = os.path.abspath(
+
+            os.path.join(
+
+                os.path.dirname(__file__),
+
+                "../../backend/app/uploads/gradcam_output.jpg"
+
+            )
+
+        )
+
+        cv2.imwrite(
+
+            output_path,
+
+            cv2.cvtColor(
+                superimposed_img,
+                cv2.COLOR_RGB2BGR
+            )
+
+        )
+
+        print(
+            "HEATMAP SAVED:",
+            output_path
+        )
+
+        return "uploads/gradcam_output.jpg"
+
+    except Exception as e:
+
+        print(
+            "GRADCAM ERROR:",
+            str(e)
+        )
+
+        return None

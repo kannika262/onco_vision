@@ -27,6 +27,7 @@ export default function UploadScan() {
       alert("Please select a file");
 
       return;
+
     }
 
     try {
@@ -94,83 +95,130 @@ export default function UploadScan() {
       );
 
       // =========================================
-      // STORE RESULT
+      // FINAL RESULT
       // =========================================
 
       const finalResult = {
 
-  ...predictionData,
+        prediction:
+          predictionData.prediction,
 
-  report: reportResponse.data
+        confidence:
+          predictionData.confidence,
 
-};
+        scan_type:
+          predictionData.scan_type || scanType,
 
-setResult(finalResult);
+        heatmap:
+          predictionData.heatmap,
 
-// =========================================
-// CREATE CASE FOR DOCTOR DASHBOARD
-// =========================================
+        report:
+          reportResponse.data
 
-const confidenceValue = parseFloat(
-  predictionData.confidence
-);
+      };
 
-let riskLevel = "Low";
+      // =========================================
+      // SAVE RESULT FOR PATIENT SIDE
+      // =========================================
 
-if (confidenceValue >= 90) {
+      setResult(finalResult);
 
-  riskLevel = "Critical";
+      // =========================================
+      // STORE CORRECT DATA
+      // FOR DOCTOR DASHBOARD
+      // =========================================
 
-}
-else if (confidenceValue >= 70) {
+      localStorage.setItem(
 
-  riskLevel = "High";
+        "latestReport",
 
-}
-else if (confidenceValue >= 40) {
+        JSON.stringify(finalResult)
 
-  riskLevel = "Moderate";
+      );
 
-}
+      console.log(
+        "SAVED REPORT:",
+        finalResult
+      );
 
-await axios.post(
+      // =========================================
+      // RISK CALCULATION
+      // =========================================
 
-  "http://127.0.0.1:8000/doctor/add-case",
+      const confidenceValue = parseFloat(
+        predictionData.confidence
+      );
 
-  {
+      let riskLevel = "Low";
 
-    case_id:
-      "CASE-" + Math.floor(Math.random() * 10000),
+      if (confidenceValue >= 90) {
 
-    patient:
-      "Patient",
+        riskLevel = "Critical";
 
-    scanType:
-      scanType === "brain"
-      ? "Brain MRI"
-      : "Lung X-Ray",
+      }
 
-    prediction:
-      predictionData.prediction,
+      else if (confidenceValue >= 70) {
 
-    confidence:
-      predictionData.confidence,
+        riskLevel = "High";
 
-    risk:
-      riskLevel,
+      }
 
-    status:
-      riskLevel === "Critical"
-      ? "Emergency"
-      : "Pending"
+      else if (confidenceValue >= 40) {
 
-  }
+        riskLevel = "Moderate";
 
-);
+      }
+
+      // =========================================
+      // CREATE CASE FOR DOCTOR DASHBOARD
+      // =========================================
+
+      await axios.post(
+
+        "http://127.0.0.1:8000/doctor/add-case",
+
+        {
+
+          case_id:
+            "CASE-" + Math.floor(Math.random() * 10000),
+
+          patient:
+            "Uploaded Patient",
+
+          scanType:
+            scanType === "brain"
+            ? "Brain MRI"
+            : "Lung X-Ray",
+
+          prediction:
+            finalResult.prediction,
+
+          confidence:
+            finalResult.confidence,
+
+          heatmap:
+            finalResult.heatmap,
+
+          report:
+            finalResult.report,
+
+          risk:
+            riskLevel,
+
+          status:
+            riskLevel === "Critical"
+            ? "Emergency"
+            : "Pending"
+
+        }
+
+      );
 
       setLoading(false);
 
-    } catch (error) {
+    }
+
+    catch (error) {
 
       console.log(error);
 
@@ -179,6 +227,7 @@ await axios.post(
       alert("Prediction Failed");
 
     }
+
   };
 
   // =========================================
@@ -533,6 +582,7 @@ await axios.post(
                 <a
 
                   href={`http://127.0.0.1:8000/pdf/generate?prediction=${result.prediction}&confidence=${result.confidence}&scan_type=${result.scan_type}`}
+
                   target="_blank"
 
                   rel="noreferrer"
@@ -559,4 +609,5 @@ await axios.post(
     </div>
 
   );
+
 }
