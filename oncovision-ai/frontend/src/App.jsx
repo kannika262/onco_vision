@@ -17,6 +17,7 @@ import UploadScan from "./pages/UploadScan";
 import ReportPage from "./pages/ReportPage";
 
 import AdminDashboard from "./pages/AdminDashboard";
+import HospitalDetails from "./pages/HospitalDetails";
 
 function App() {
 
@@ -111,6 +112,10 @@ function App() {
           path="/admin"
           element={<AdminDashboard />}
         />
+        <Route
+  path="/hospital-details"
+  element={<HospitalDetails />}
+/>
 
       </Routes>
 

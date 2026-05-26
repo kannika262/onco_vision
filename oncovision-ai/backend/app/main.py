@@ -18,6 +18,7 @@ from app.api.report_routes import router as report_router
 
 from app.api.pdf_routes import router as pdf_router
 from app.api.doctor_routes import router as doctor_router
+from app.api.federated_routes import router as federated_router
 
 
 # =========================================
@@ -62,6 +63,7 @@ app.include_router(report_router)
 
 app.include_router(pdf_router)
 app.include_router(doctor_router)
+app.include_router(federated_router)
 # =========================================
 # STATIC FILES
 # =========================================
